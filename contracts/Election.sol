@@ -14,6 +14,9 @@ contract Election {
     address public owner;
     bool private locked = false;
 
+    event PayoutSuccess(address recipient, uint amount);
+    event PayoutFailure(address recipient, uint amount);
+
     modifier onlyOwner() {
         require(msg.sender == owner, "Only the contract owner can perform this operation.");
         _;
@@ -57,18 +60,23 @@ contract Election {
         hasVoted[msg.sender] = true;
     }
     
-function payout() external noReentrancy {
-    require(block.timestamp > contractEndTime, "Voting period is not yet over.");
+    function payout() external noReentrancy {
+        require(block.timestamp > contractEndTime, "Voting period is not yet over.");
 
-    Candidate memory highestCandidate = candidates[0];
-    for(uint i = 1; i < candidates.length; i++){
-        if(candidates[i].voteCount > highestCandidate.voteCount){
-            highestCandidate = candidates[i];
+        Candidate memory highestCandidate = candidates[0];
+        for(uint i = 1; i < candidates.length; i++){
+            if(candidates[i].voteCount > highestCandidate.voteCount){
+                highestCandidate = candidates[i];
+            }
+        }
+
+        (bool success, ) = highestCandidate.addr.call{value: address(this).balance}("");
+        if(success){
+            emit PayoutSuccess(highestCandidate.addr, address(this).balance);
+        } else {
+            emit PayoutFailure(highestCandidate.addr, address(this).balance);
         }
     }
-
-    (bool success, ) = payable(highestCandidate.addr).call{value: address(this).balance}("");
-    require(success, "Transfer failed.");
-}   
+    
     receive() external payable {}
 }
